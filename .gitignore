@@ -1,0 +1,4 @@
+*.o
+cos
+*.gch
+obj/
