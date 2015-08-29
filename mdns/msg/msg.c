@@ -39,3 +39,7 @@ void clean_msg(dns_msg_t * msg) {
   free(msg->additionals);
   msg->additionals = NULL;
 }
+
+void send_format(dns_msg_t * msg, char * buffer) {
+  
+}

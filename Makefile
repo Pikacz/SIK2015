@@ -10,15 +10,18 @@ dir:
 	mkdir -p obj/tests
 	mkdir -p obj/tests/mdns
 
-mdns_msg_header: dir ./mdns/msg/header.c ./mdns/msg/header.h \
+mdns_msg_utils: dir ./mdns/msg/utils.c ./mdns/msg/utils.h
+	$(CC) $(CFLAGS) ./mdns/msg/utils.c -c -o obj/mdns/msg/utils.o
+
+mdns_msg_header: mdns_msg_utils ./mdns/msg/header.c ./mdns/msg/header.h \
 	               ./mdns/msg/limits.h
 	$(CC) $(CFLAGS) ./mdns/msg/header.c -c -o obj/mdns/msg/header.o
 
-mdns_msg_question: dir ./mdns/msg/question.h ./mdns/msg/question.c \
+mdns_msg_question: mdns_msg_utils ./mdns/msg/question.h ./mdns/msg/question.c \
 	                 ./mdns/msg/limits.h
 	$(CC) $(CFLAGS) ./mdns/msg/question.c -c -o obj/mdns/msg/question.o
 
-mdns_msg_resource: dir ./mdns/msg/resource.c ./mdns/msg/resource.h \
+mdns_msg_resource: mdns_msg_utils ./mdns/msg/resource.c ./mdns/msg/resource.h \
 	                 ./mdns/msg/limits.h
 	$(CC) $(CFLAGS) ./mdns/msg/resource.c -c -o obj/mdns/msg/resource.o
 
@@ -42,7 +45,7 @@ tests: dir tests_mdns ./tests/tests.c ./tests/tests.h
 main: mdns tests main.c
 	$(CC) $(CFLAGS) main.c \
 	 obj/mdns/msg/header.o obj/mdns/msg/question.o obj/mdns/msg/resource.o \
-	 obj/mdns/msg/msg.o obj/mdns/mdns.o \
+	 obj/mdns/msg/msg.o obj/mdns/msg/utils.o obj/mdns/mdns.o \
 	 obj/tests/tests.o obj/tests/mdns/msg.o obj/tests/mdns/mdns.o \
 	 -o cos
 

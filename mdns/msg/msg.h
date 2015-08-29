@@ -21,5 +21,6 @@ void init_msg(dns_msg_t * msg);
 
 void clean_msg(dns_msg_t * msg);
 
+void send_format(dns_msg_t * msg, char * buffer);
 
 #endif

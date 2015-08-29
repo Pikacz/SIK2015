@@ -66,4 +66,7 @@ uint16_t get_ARCOUNT(dns_header_t *header);
 
 void print_header(dns_header_t * header);
 
+int header_send_format(dns_header_t * header, char * buff);
+void header_from_network(dns_header_t * header, char * buff);
+
 #endif
