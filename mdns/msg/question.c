@@ -1,12 +1,8 @@
 #include "question.h"
+#include "utils.h"
 
 #include <stdio.h>
 
-// struct __dns_question {
-//   uint16_t QTYPE;
-//   uint16_t QCLASS;
-//   char * QNAME;
-// };
 
 void set_QU(dns_question_t * question) {
   question->QTYPE |= 0x8000;
@@ -50,6 +46,51 @@ int set_QNAME(dns_question_t * question, const char * domain) {
       break;
     }
   }
+  question->qname_length = s - question->QNAME + 1;
+  return question->qname_length;
+}
 
-  return s - question->QNAME + 1;
+
+int question_send_format(dns_question_t * question, char * buff) {
+  int i, size = 0, tmp;
+  for(i = 0; i < question->qname_length; ++i) {
+    *buff = question->QNAME[i];
+    ++buff;
+  }
+  size += question->qname_length;
+  tmp = unit16_to_send(question->QTYPE, buff);
+  size += tmp;
+  buff += tmp;
+  tmp = unit16_to_send(question->QCLASS, buff);
+  size += tmp;
+  return size;
+}
+
+
+void question_from_network(dns_question_t * question, char * buff) {
+  char c = buff[0], i = 0;
+  int j = 0;
+
+  question->qname_length = 1;
+  (question->QNAME)[j] = *buff;
+  buff++;
+  j++;
+
+  while(c) {
+    for(i = 0; i < c; ++i) {
+      (question->QNAME)[j] = *buff;
+      buff++;
+      j++;
+      question->qname_length += 1;
+    }
+    c = *buff;
+    (question->QNAME)[j] = *buff;
+    buff++;
+    j++;
+    question->qname_length += 1;
+  }
+
+  question->QTYPE = get_uint16_t(buff);
+  buff += 2;
+  question->QCLASS = get_uint16_t(buff);
 }

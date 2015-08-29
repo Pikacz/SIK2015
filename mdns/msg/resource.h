@@ -11,9 +11,12 @@ struct __dns_resource {
   uint32_t TTL;
   uint16_t RDLENGTH;
   char RDATA[DNS_R_DATA_MAX_LENGTH];
+  char * msg;
 };
 
 typedef struct __dns_resource dns_resource_t;
 
+int resource_send_format(dns_resource_t * resource, char * buff);
+void resource_from_network(dns_resource_t * resource, char * buff);
 
 #endif
