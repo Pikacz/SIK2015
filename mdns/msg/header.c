@@ -248,7 +248,9 @@ int header_send_format(dns_header_t * header, char * buff) {
   return size;
 }
 
-int header_from_network(dns_header_t * header, char * buff) {
+int header_from_network(dns_header_t * header, char * buff, int max_size) {
+  if (max_size < 12)
+    return -1;
   int i;
   for(i = 0; i < 6; ++i) {
     (header->h)[i] = get_uint16_t(buff);

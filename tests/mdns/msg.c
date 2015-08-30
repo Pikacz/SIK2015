@@ -219,7 +219,7 @@ void header_t2() {
   dns_header_t header1, header2;
   random_header(&header1);
   assert(12 == header_send_format(&header1, buff));
-  header_from_network(&header2, buff);
+  header_from_network(&header2, buff, 12);
   for (i = 0; i < 6; ++i)
     assert(header1.h[i] == header2.h[i]);
 }
@@ -293,7 +293,8 @@ void q_t3() {
   q1.QCLASS = 0x5678;
 
   question_send_format(&q1, buff);
-  question_from_network(&q2, buff);
+  assert(question_from_network(&q2, buff, 1) == -1);
+  question_from_network(&q2, buff, 400);
 
   assert(q1.QCLASS == q2.QCLASS);
   assert(q1.QTYPE == q2.QTYPE);
@@ -343,7 +344,8 @@ void q_t4() {
   random_question(&q1);
 
   question_send_format(&q1, buff);
-  question_from_network(&q2, buff);
+  assert(question_from_network(&q2, buff, 1) == -1);
+  question_from_network(&q2, buff, 400);
 
   assert(q1.QCLASS == q2.QCLASS);
   assert(q1.QTYPE == q2.QTYPE);
@@ -453,7 +455,8 @@ void r_t2() {
   rand_resource(&r1);
   char buff[400];
   resource_send_format(&r1, buff);
-  resource_from_network(&r2, buff);
+  assert(resource_from_network(&r2, buff, 1) == -1);
+  resource_from_network(&r2, buff, 400);
   names_equal(r1.NAME, r2.NAME);
   assert(r1.TYPE == r2.TYPE);
   assert(r1.CLASS == r2.CLASS);
@@ -684,7 +687,8 @@ void m_1() {
   for(i = 0; i < 72; ++i)
     assert(ex[i] == buff[i]);
   dns_msg_t m;
-  message_from_network(&m, buff);
+  assert(message_from_network(&m, buff, 1) == -1);
+  message_from_network(&m, buff, 1000000);
   assert((msg.header.h)[0] == (m.header.h)[0]);
   assert((msg.header.h)[1] == (m.header.h)[1]);
   assert((msg.header.h)[2] == (m.header.h)[2]);

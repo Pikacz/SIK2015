@@ -45,28 +45,37 @@ uint32_t get_uint32_t(char * buff) {
 }
 
 
-int get_NAME_from_net(char * dest, char * buff) {
+int get_NAME_from_net(char * dest, char * buff, int max_size) {
 
   char c = buff[0], i = 0;
   int j = 0, length;
 
   length = 1;
+  if(max_size == 0)
+    return -1;
   dest[j] = *buff;
   buff++;
   j++;
+  max_size--;
 
   while(c) {
     for(i = 0; i < c; ++i) {
+      if(max_size == 0)
+        return -1;
       dest[j] = *buff;
       buff++;
       j++;
       length += 1;
+      max_size--;
     }
+    if(max_size == 0)
+      return -1;
     c = *buff;
     dest[j] = *buff;
     buff++;
     j++;
     length += 1;
+    max_size--;
   }
   return length;
 }
