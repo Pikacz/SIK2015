@@ -9,4 +9,6 @@ void question();
 
 void resource();
 
+void message();
+
 #endif

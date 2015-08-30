@@ -1,5 +1,6 @@
 #include "question.h"
 #include "utils.h"
+#include "globals.h"
 
 #include <stdio.h>
 
@@ -67,30 +68,20 @@ int question_send_format(dns_question_t * question, char * buff) {
 }
 
 
-void question_from_network(dns_question_t * question, char * buff) {
-  char c = buff[0], i = 0;
-  int j = 0;
-
-  question->qname_length = 1;
-  (question->QNAME)[j] = *buff;
-  buff++;
-  j++;
-
-  while(c) {
-    for(i = 0; i < c; ++i) {
-      (question->QNAME)[j] = *buff;
-      buff++;
-      j++;
-      question->qname_length += 1;
-    }
-    c = *buff;
-    (question->QNAME)[j] = *buff;
-    buff++;
-    j++;
-    question->qname_length += 1;
-  }
+int question_from_network(dns_question_t * question, char * buff) {
+  char * tmp = buff;
+  question->qname_length = get_NAME_from_net(question->QNAME, buff);
+  buff += question->qname_length;
 
   question->QTYPE = get_uint16_t(buff);
   buff += 2;
   question->QCLASS = get_uint16_t(buff);
+  buff += 2;
+
+  return buff - tmp;
+}
+
+
+int is_qPTR(dns_question_t* q) {
+  return q->QCLASS == TYPE_PTR;
 }

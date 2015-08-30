@@ -1,4 +1,5 @@
 *.o
 cos
+tesciki
 *.gch
 obj/

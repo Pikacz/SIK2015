@@ -4,11 +4,14 @@
 #include <string.h>     // strlen
 #include <assert.h>
 #include <inttypes.h>
+#include <netinet/in.h>
+
 
 #include "../../mdns/msg/header.h"
 #include "../../mdns/msg/question.h"
 #include "../../mdns/msg/utils.h"
 #include "../../mdns/msg/resource.h"
+#include "../../mdns/msg/msg.h"
 #include "msg.h"
 
 
@@ -75,11 +78,13 @@ void utils() {
   int i, rounds = 1000000;// 000;
   fprintf(stderr, "DNS MSG UTILS TESTS:\n");
   fprintf(stderr, "   %d random uint16_t       ", rounds);
+  check_uint16(0);
   for(i = 0; i < rounds; ++i)
     check_uint16(my_rand(0, 0xFFFF));
   fprintf(stderr, "SUCESS!\n");
 
   fprintf(stderr, "   %d random uint32_t       ", rounds);
+  check_uint32(0);
   for(i = 0; i < rounds; ++i)
     check_uint32(my_rand32());
   fprintf(stderr, "SUCESS!\n");
@@ -300,30 +305,35 @@ void q_t3() {
 }
 
 
-void random_question(dns_question_t * question) {
-  question->QTYPE = my_rand16();
-  question->QCLASS = my_rand16();
-  question->qname_length = 0;
-  int i;
-  char* it = question->QNAME;
+int random_name(char * it) {
+  int length = 0, i;
   char c, cc;
   for(i = 0; i < 2; ++i) {
     c = my_rand6();
-    if (c == 0)
+    if (c <= 0)
       c = 1;
+    if (c > 63)
+      c = 63;
 
     *it  = c;
     ++it;
-    (question->qname_length)++;
+    length++;
 
     for(cc = 0; cc < c; ++cc) {
       *it  = my_rand8();
       ++it;
-      (question->qname_length)++;
+      length++;
     }
   }
   *it = 0;
-  (question->qname_length)++;
+  length++;
+  return length;
+}
+
+void random_question(dns_question_t * question) {
+  question->QTYPE = my_rand16();
+  question->QCLASS = my_rand16();
+  question->qname_length = random_name(question->QNAME);
 }
 
 
@@ -367,9 +377,326 @@ void question() {
 
 
 void r_t1() {
+  dns_resource_t res;
+  int i;
+  const char * name = "\x03" "www" "\x01" "a" "\x02" "pl";
+  static char ex[23], buff[200];
+  for(i = 0; i < 10; ++i)
+    res.NAME[i] = name[i];
+  res.TYPE = 0x1234;
+  res.CLASS = 0x5678;
+  res.TTL = 0x87654321;
+  res.RDLENGTH = 0x03;
+  res.RDATA[0] = 'b';
+  res.RDATA[1] = 'c';
+  res.RDATA[2] = 'd';
+
+  ex[0]  = '\x03';
+  ex[1]  = 'w';
+  ex[2]  = 'w';
+  ex[3]  = 'w';
+  ex[4]  = '\x01';
+  ex[5]  = 'a';
+  ex[6]  = '\x02';
+  ex[7]  = 'p';
+  ex[8]  = 'l';
+  ex[9]  = '\x00';
+  ex[10] = '\x12';
+  ex[11] = '\x34';
+  ex[12] = '\x56';
+  ex[13] = '\x78';
+  ex[14] = (char)((0x87654321 & 0xFF000000) >> 24);
+  ex[15] = (char)((0x87654321 & 0x00FF0000) >> 16);
+  ex[16] = (char)((0x87654321 & 0x0000FF00) >> 8);
+  ex[17] = (char)((0x87654321 & 0x000000FF) >> 0);
+  ex[18] = (char)((0x03 & 0xFF00) >> 8);
+  ex[19] = (char)((0x03 & 0x00FF) >> 0);
+  ex[20] = 'b';
+  ex[21] = 'c';
+  ex[22] = 'd';
+  int tmp = resource_send_format(&res, buff);
+  assert(tmp == 23);
+  for(i = 0; i < 23; ++i) {
+    assert(ex[i] == buff[i]);
+  }
+
+}
+
+void rand_resource(dns_resource_t * res) {
+  random_name(res->NAME);
+  res->TYPE = my_rand16();
+  res->CLASS = my_rand16();
+  res->TTL = my_rand32();
+
+  res->RDLENGTH = my_rand(0,20);
+
+  int i;
+  for(i = 0; i < res->RDLENGTH; ++i) {
+    (res->RDATA)[i] = my_rand8();
+  }
+}
+
+void names_equal(char * n1, char * n2) {
+  int i = 0;
+
+  while((n1[i] != 0) &&(n2[i] != 0)) {
+    assert(n1[i] == n2[i]);
+    i++;
+  }
+  assert(n1[i] == n2[i]);
+}
+
+
+
+void r_t2() {
+  dns_resource_t r1, r2;
+  rand_resource(&r1);
+  char buff[400];
+  resource_send_format(&r1, buff);
+  resource_from_network(&r2, buff);
+  names_equal(r1.NAME, r2.NAME);
+  assert(r1.TYPE == r2.TYPE);
+  assert(r1.CLASS == r2.CLASS);
+  assert(r1.TTL == r2.TTL);
+  assert(r1.RDLENGTH == r2.RDLENGTH);
+  int i;
+  for(i = 0; i < r1.RDLENGTH; ++i)
+    assert(r1.RDATA[i] == r2.RDATA[i]);
 
 }
 
 void resource() {
+  r_t1();
+  int i, rounds = 1000000;
+  fprintf(stderr, "DNS MSG RESOURCE TESTS:\n   %d random resources      ",
+          rounds);
+  for(i = 0; i < rounds; ++i)
+    r_t2();
+  fprintf(stderr, "SUCESS!\n");
+}
 
+
+void headers_equal(dns_header_t * h1, dns_header_t * h2) {
+  int i;
+  for (i = 0; i < 6; ++i) {
+    assert((h1->h)[i] == (h2->h)[i]);
+  }
+}
+
+
+void questions_equal(dns_question_t * q1, dns_question_t * q2) {
+  assert(q1->QCLASS == q2->QCLASS);
+  assert(q1->QTYPE == q2->QTYPE);
+}
+
+void resources_equal(dns_resource_t * r1, dns_resource_t * r2) {
+  assert(r1->TYPE == r2->TYPE);
+  assert(r1->CLASS == r2->CLASS);
+  assert(r1->TTL == r2->TTL);
+  assert(r1->RDLENGTH == r2->RDLENGTH);
+  names_equal(r1->NAME, r2->NAME);
+}
+
+
+void messages_equal(dns_msg_t * m1, dns_msg_t * m2) {
+  int i;
+  headers_equal(&(m1->header), &(m2->header));
+  for(i = 0; i < get_QDCOUNT(&(m1->header)); ++i) {
+    questions_equal((m1->questions) + i, (m2->questions) + i);
+  }
+
+  for(i = 0; i < get_ANCOUNT(&(m1->header)); ++i) {
+    resources_equal((m1->answers) + i, (m2->answers) + i);
+  }
+
+  for(i = 0; i < get_NSCOUNT(&(m1->header)); ++i) {
+    resources_equal((m1->authorities) + i, (m2->authorities) + i);
+  }
+
+  for(i = 0; i < get_ARCOUNT(&(m1->header)); ++i) {
+    resources_equal((m1->additionals) + i, (m2->additionals) + i);
+  }
+
+}
+
+
+void m_1() {
+  dns_msg_t msg;
+  dns_question_t q;
+  dns_resource_t ans, auth, add;
+
+  static char ex[123], buff[1000000];
+  init_header(&(msg.header));
+  set_ID(&(msg.header), 13);
+  set_QR(&(msg.header), 1);
+  set_Opcode(&(msg.header), 10);
+  set_AA(&(msg.header), 0);
+  set_TC(&(msg.header), 1);
+  set_Z(&(msg.header), 1);
+  set_QDCOUNT(&(msg.header), 1);
+  set_ANCOUNT(&(msg.header), 1);
+  set_NSCOUNT(&(msg.header), 1);
+  set_ARCOUNT(&(msg.header), 1);
+  q.QNAME[0] = 1;
+  q.QNAME[1] = 11;
+  q.QNAME[2] = 2;
+  q.QNAME[3] = 31;
+  q.QNAME[4] = 32;
+  q.QNAME[5] = 0;
+  q.qname_length = 6;
+  q.QTYPE = 0x5667;
+  q.QCLASS = 0x7665;
+  msg.questions = &q;
+
+  ans.NAME[0] = 2;
+  ans.NAME[1] = 21;
+  ans.NAME[2] = 22;
+  ans.NAME[3] = 1;
+  ans.NAME[4] = 11;
+  ans.NAME[5] = 0;
+  ans.TYPE = 0x1212;
+  ans.CLASS = 0x2121;
+  ans.TTL = 0x87654321;
+  ans.RDLENGTH = 1;
+  ans.RDATA[0] = 43;
+  msg.answers = &ans;
+
+  auth.NAME[0] = 2;
+  auth.NAME[1] = 23;
+  auth.NAME[2] = 24;
+  auth.NAME[3] = 1;
+  auth.NAME[4] = 12;
+  auth.NAME[5] = 0;
+  auth.TYPE = 0x1221;
+  auth.CLASS = 0x2112;
+  auth.TTL = 0x87654321;
+  auth.RDLENGTH = 1;
+  auth.RDATA[0] = 44;
+  msg.authorities = &auth;
+
+  add.NAME[0] = 2;
+  add.NAME[1] = 25;
+  add.NAME[2] = 26;
+  add.NAME[3] = 1;
+  add.NAME[4] = 13;
+  add.NAME[5] = 0;
+  add.TYPE = 0x1221;
+  add.CLASS = 0x2112;
+  add.TTL = 0x87654321;
+  add.RDLENGTH = 0;
+  msg.additionals = &add;
+
+  int tmp;
+  tmp = send_format_msg(&msg, buff);
+
+  // header
+  ex[0] = (char)((13 & 0xFF00) >> 8);
+  ex[1] = (char)((13 & 0x00FF));
+  ex[2] = 0xd2;
+  ex[3] = 0x10;
+  ex[4] = (char)((0x0001 & 0xFF00) >> 8);
+  ex[5] = (char)((0x0001 & 0x00FF));
+  ex[6] = (char)((0x0001 & 0xFF00) >> 8);
+  ex[7] = (char)((0x0001 & 0x00FF));
+  ex[8] = (char)((0x0001 & 0xFF00) >> 8);
+  ex[9] = (char)((0x0001 & 0x00FF));
+  ex[10] = (char)((0x0001 & 0xFF00) >> 8);
+  ex[11] = (char)((0x0001 & 0x00FF));
+
+  // questions
+  ex[12] = 1;
+  ex[13] = 11;
+  ex[14] = 2;
+  ex[15] = 31;
+  ex[16] = 32;
+  ex[17] = 0;
+  ex[18] = 0x56;
+  ex[19] = 0x67;
+  ex[20] = 0x76;
+  ex[21] = 0x65;
+
+  // answers
+  ex[22] = 2;
+  ex[23] = 21;
+  ex[24] = 22;
+  ex[25] = 1;
+  ex[26] = 11;
+  ex[27] = 0;
+  ex[28] = 0x12;
+  ex[29] = 0x12;
+  ex[30] = 0x21;
+  ex[31] = 0x21;
+
+  ex[32] = (char)((0x87654321 & 0xFF000000) >> 24);
+  ex[33] = (char)((0x87654321 & 0x00FF0000) >> 16);
+  ex[34] = (char)((0x87654321 & 0x0000FF00) >> 8);
+  ex[35] = (char)((0x87654321 & 0x000000FF) >> 0);
+
+  ex[36] = (char)((0x0001 & 0xFF00) >> 8);
+  ex[37] = (char)((0x0001 & 0x00FF));
+  ex[38] = 43;
+
+  // authorities
+  ex[39] = 2;
+  ex[40] = 23;
+  ex[41] = 24;
+  ex[42] = 1;
+  ex[43] = 12;
+  ex[44] = 0;
+  ex[45] = 0x12;
+  ex[46] = 0x21;
+  ex[47] = 0x21;
+  ex[48] = 0x12;
+
+  ex[49] = (char)((0x87654321 & 0xFF000000) >> 24);
+  ex[50] = (char)((0x87654321 & 0x00FF0000) >> 16);
+  ex[51] = (char)((0x87654321 & 0x0000FF00) >> 8);
+  ex[52] = (char)((0x87654321 & 0x000000FF) >> 0);
+
+  ex[53] = (char)((0x0001 & 0xFF00) >> 8);
+  ex[54] = (char)((0x0001 & 0x00FF));
+  ex[55] = 44;
+
+  // additionals
+  ex[56] = 2;
+  ex[57] = 25;
+  ex[58] = 26;
+  ex[59] = 1;
+  ex[60] = 13;
+  ex[61] = 0;
+  ex[62] = 0x12;
+  ex[63] = 0x21;
+
+  ex[64] = 0x21;
+  ex[65] = 0x12;
+
+  ex[66] = (char)((0x87654321 & 0xFF000000) >> 24);
+  ex[67] = (char)((0x87654321 & 0x00FF0000) >> 16);
+  ex[68] = (char)((0x87654321 & 0x0000FF00) >> 8);
+  ex[69] = (char)((0x87654321 & 0x000000FF) >> 0);
+
+  ex[70] = (char)((0x0000 & 0xFF00) >> 8);
+  ex[71] = (char)((0x0000 & 0x00FF));
+
+  assert(tmp == 72);
+
+  int i;
+  for(i = 0; i < 72; ++i)
+    assert(ex[i] == buff[i]);
+  dns_msg_t m;
+  message_from_network(&m, buff);
+  assert((msg.header.h)[0] == (m.header.h)[0]);
+  assert((msg.header.h)[1] == (m.header.h)[1]);
+  assert((msg.header.h)[2] == (m.header.h)[2]);
+  assert((msg.header.h)[3] == (m.header.h)[3]);
+  assert((msg.header.h)[4] == (m.header.h)[4]);
+  assert((msg.header.h)[5] == (m.header.h)[5]);
+
+  messages_equal(&msg, &m);
+}
+
+void message() {
+  fprintf(stderr, "DNS MSG MSG TESTS:\n");
+  m_1();
+  fprintf(stderr, "SUCESS!\n");
 }

@@ -19,8 +19,9 @@
 #include "header.h"
 #include "utils.h"
 
-#include <assert.h> // assert
-#include <string.h> // memset
+#include <netinet/in.h> // htons
+#include <assert.h>     // assert
+#include <string.h>     // memset
 
 #include <stdio.h>
 
@@ -218,20 +219,41 @@ void print_header(dns_header_t * header) {
 
 
 int header_send_format(dns_header_t * header, char * buff) {
-  int size = 0, tmp, i;
-  for (i = 0; i < 6; ++i) {
-    tmp = unit16_to_send((header->h)[i], buff);
-    size += tmp;
-    buff += tmp;
-  }
+  int size = 0, tmp;
+
+  tmp = unit16_to_send((header->h)[0], buff);
+  size += tmp;
+  buff += tmp;
+
+  tmp = unit16_to_send((header->h)[1], buff);
+  size += tmp;
+  buff += tmp;
+
+  tmp = unit16_to_send((header->h)[2], buff);
+  size += tmp;
+  buff += tmp;
+
+  tmp = unit16_to_send((header->h)[3], buff);
+  size += tmp;
+  buff += tmp;
+
+  tmp = unit16_to_send((header->h)[4], buff);
+  size += tmp;
+  buff += tmp;
+
+  tmp = unit16_to_send((header->h)[5], buff);
+  size += tmp;
+  buff += tmp;
 
   return size;
 }
 
-void header_from_network(dns_header_t * header, char * buff) {
+int header_from_network(dns_header_t * header, char * buff) {
   int i;
   for(i = 0; i < 6; ++i) {
     (header->h)[i] = get_uint16_t(buff);
     buff += 2;
   }
+  (header->h)[0] = (header->h)[0];
+  return 12;
 }

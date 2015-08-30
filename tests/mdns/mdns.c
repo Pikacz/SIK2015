@@ -3,6 +3,8 @@
 
 void run_mdns_tests() {
   utils();
-  question();
   header();
+  question();
+  resource();
+  message();
 }
