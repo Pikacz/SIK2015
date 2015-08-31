@@ -23,9 +23,13 @@ uint16_t is_QM(dns_question_t * question);
 int set_QNAME(dns_question_t * question, const char * domain);
 
 int question_send_format(dns_question_t * question, char * buff);
-int question_from_network(dns_question_t * question, char * buff, int max_size);
+int question_from_network(dns_question_t * question, char * buff, int max_size,
+                          char * full_msg);
 
 int is_qPTR(dns_question_t* q);
 void set_qPTR(dns_question_t* q);
+
+int is_qA(dns_question_t* q);
+void set_qA(dns_question_t* q);
 
 #endif

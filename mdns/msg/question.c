@@ -68,9 +68,11 @@ int question_send_format(dns_question_t * question, char * buff) {
 }
 
 
-int question_from_network(dns_question_t * question, char * buff, int max_size){
+int question_from_network(dns_question_t * question, char * buff, int max_size,
+                          char * full_msg){
   char * tmp = buff;
-  question->qname_length = get_NAME_from_net(question->QNAME, buff, max_size);
+  question->qname_length = get_NAME_from_net(question->QNAME, buff, max_size,
+                                             full_msg);
   if (question->qname_length < 0)
     return -1;
   max_size -= question->qname_length;
@@ -92,9 +94,17 @@ int question_from_network(dns_question_t * question, char * buff, int max_size){
 
 
 int is_qPTR(dns_question_t* q) {
-  return (q->QCLASS == TYPE_PTR);
+  return (q->QTYPE == TYPE_PTR);
 }
 
 void set_qPTR(dns_question_t* q) {
-  q->QCLASS = TYPE_PTR;
+  q->QTYPE = TYPE_PTR;
+}
+
+int is_qA(dns_question_t* q) {
+  return (q->QTYPE == TYPE_A);
+}
+
+void set_qA(dns_question_t* q) {
+  q->QTYPE = TYPE_A;
 }

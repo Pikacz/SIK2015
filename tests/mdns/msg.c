@@ -12,6 +12,7 @@
 #include "../../mdns/msg/utils.h"
 #include "../../mdns/msg/resource.h"
 #include "../../mdns/msg/msg.h"
+#include "../../mdns/msg/globals.h"
 #include "msg.h"
 
 
@@ -293,8 +294,8 @@ void q_t3() {
   q1.QCLASS = 0x5678;
 
   question_send_format(&q1, buff);
-  assert(question_from_network(&q2, buff, 1) == -1);
-  question_from_network(&q2, buff, 400);
+  assert(question_from_network(&q2, buff, 1, buff) == -1);
+  question_from_network(&q2, buff, 400, buff);
 
   assert(q1.QCLASS == q2.QCLASS);
   assert(q1.QTYPE == q2.QTYPE);
@@ -344,8 +345,8 @@ void q_t4() {
   random_question(&q1);
 
   question_send_format(&q1, buff);
-  assert(question_from_network(&q2, buff, 1) == -1);
-  question_from_network(&q2, buff, 400);
+  assert(question_from_network(&q2, buff, 1, buff) == -1);
+  question_from_network(&q2, buff, 400, buff);
 
   assert(q1.QCLASS == q2.QCLASS);
   assert(q1.QTYPE == q2.QTYPE);
@@ -427,6 +428,8 @@ void r_t1() {
 void rand_resource(dns_resource_t * res) {
   random_name(res->NAME);
   res->TYPE = my_rand16();
+  while(res->TYPE == TYPE_A || res->TYPE == TYPE_PTR)
+    res->TYPE = my_rand16();
   res->CLASS = my_rand16();
   res->TTL = my_rand32();
 
@@ -455,8 +458,8 @@ void r_t2() {
   rand_resource(&r1);
   char buff[400];
   resource_send_format(&r1, buff);
-  assert(resource_from_network(&r2, buff, 1) == -1);
-  resource_from_network(&r2, buff, 400);
+  assert(resource_from_network(&r2, buff, 1, buff) == -1);
+  resource_from_network(&r2, buff, 400, buff);
   names_equal(r1.NAME, r2.NAME);
   assert(r1.TYPE == r2.TYPE);
   assert(r1.CLASS == r2.CLASS);

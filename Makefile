@@ -1,4 +1,4 @@
-TARGET: main main_test
+TARGET: main main_test sender reciever
 CC = gcc
 CFLAGS = -Wall
 
@@ -10,7 +10,7 @@ dir:
 	mkdir -p obj/tests
 	mkdir -p obj/tests/mdns
 
-mdns_msg_utils: dir ./mdns/msg/utils.c ./mdns/msg/utils.h
+mdns_msg_utils: dir ./mdns/msg/utils.c ./mdns/msg/utils.h ./mdns/msg/limits.h
 	$(CC) $(CFLAGS) ./mdns/msg/utils.c -c -o obj/mdns/msg/utils.o
 
 mdns_msg_header: mdns_msg_utils ./mdns/msg/header.c ./mdns/msg/header.h \
@@ -51,12 +51,24 @@ main_test: mdns tests main_test.c
 
 main: mdns tests main.c
 	$(CC) $(CFLAGS) main.c \
-	 obj/mdns/msg/header.o obj/mdns/msg/question.o obj/mdns/msg/resource.o \
-	 obj/mdns/msg/msg.o obj/mdns/msg/utils.o obj/mdns/mdns.o \
-	 obj/tests/tests.o obj/tests/mdns/msg.o obj/tests/mdns/mdns.o \
-	 -o cos
+	obj/mdns/msg/header.o obj/mdns/msg/question.o obj/mdns/msg/resource.o \
+	obj/mdns/msg/msg.o obj/mdns/msg/utils.o obj/mdns/mdns.o \
+	obj/tests/tests.o obj/tests/mdns/msg.o obj/tests/mdns/mdns.o \
+	-o cos
 
+sender: mdns sender.c
+	$(CC) $(CFLAGS) sender.c \
+	obj/mdns/msg/header.o obj/mdns/msg/question.o obj/mdns/msg/resource.o \
+	obj/mdns/msg/msg.o obj/mdns/msg/utils.o obj/mdns/mdns.o \
+	obj/tests/tests.o obj/tests/mdns/msg.o obj/tests/mdns/mdns.o \
+	-o sender.bin
 
+reciever: mdns reciever.c
+	$(CC) $(CFLAGS) reciever.c \
+ 	 obj/mdns/msg/header.o obj/mdns/msg/question.o obj/mdns/msg/resource.o \
+ 	 obj/mdns/msg/msg.o obj/mdns/msg/utils.o obj/mdns/mdns.o \
+ 	 obj/tests/tests.o obj/tests/mdns/msg.o obj/tests/mdns/mdns.o \
+ 	 -o reciever.bin
 
 clean:
 	rm -rf obj

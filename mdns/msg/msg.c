@@ -69,7 +69,8 @@ int send_format_msg(dns_msg_t * msg, char * buffer) {
 }
 
 
-int message_from_network(dns_msg_t * msg, char * buff, int max_size) {
+int message_from_network(dns_msg_t * msg, char * full_msg, int max_size) {
+  char * buff = full_msg;
   char * tmp_buff = buff;
   uint16_t i;
   int tmp;
@@ -89,31 +90,40 @@ int message_from_network(dns_msg_t * msg, char * buff, int max_size) {
     malloc(sizeof(dns_resource_t) * get_ARCOUNT(&(msg->header)));
 
   for(i = 0; i < get_QDCOUNT(&(msg->header)); ++i) {
-    tmp = question_from_network(msg->questions + i, buff, max_size);
-    if(tmp < 0)
+    tmp = question_from_network(msg->questions + i, buff, max_size, full_msg);
+    if(tmp < 0) {
+      clean_msg(msg);
       return -1;
+    }
+
     buff += tmp;
     max_size -= tmp;
   }
 
   for(i = 0; i < get_ANCOUNT(&(msg->header)); ++i) {
-    tmp = resource_from_network(msg->answers + i, buff, max_size);
-    if(tmp < 0)
+    tmp = resource_from_network(msg->answers + i, buff, max_size, full_msg);
+    if(tmp < 0) {
+      clean_msg(msg);
       return -1;
+    }
     buff += tmp;
   }
 
   for(i = 0; i < get_NSCOUNT(&(msg->header)); ++i) {
-    tmp = resource_from_network(msg->authorities + i, buff, max_size);
-    if(tmp < 0)
+    tmp = resource_from_network(msg->authorities + i, buff, max_size, full_msg);
+    if(tmp < 0) {
+      clean_msg(msg);
       return -1;
+    }
     buff += tmp;
   }
 
   for(i = 0; i < get_ARCOUNT(&(msg->header)); ++i) {
-    tmp = resource_from_network(msg->additionals + i, buff, max_size);
-    if(tmp < 0)
+    tmp = resource_from_network(msg->additionals + i, buff, max_size, full_msg);
+    if(tmp < 0) {
+      clean_msg(msg);
       return -1;
+    }
     buff += tmp;
   }
 

@@ -11,6 +11,8 @@ uint16_t get_uint16_t(char * buff);
 
 uint32_t get_uint32_t(char * buff);
 
-int get_NAME_from_net(char * dest, char * buff, int max_size);
+int get_NAME_from_net(char * dest, char * buff, int max_size, char * full_msg);
+
+int domain_to_NAME(char * NAME, const char * domain);
 
 #endif

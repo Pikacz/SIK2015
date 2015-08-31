@@ -4,8 +4,6 @@
 #include "msg/msg.h"
 
 
-
-
-int is_rPTR(dns_resource_t* r);
+int answer_A(dns_question_t * question, dns_resource_t * answer);
 
 #endif

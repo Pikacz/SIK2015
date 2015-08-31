@@ -2,6 +2,7 @@
 
 #include "resource.h"
 #include "utils.h"
+#include "globals.h"
 
 
 int resource_send_format(dns_resource_t * resource, char * buff) {
@@ -45,10 +46,11 @@ int resource_send_format(dns_resource_t * resource, char * buff) {
 }
 
 
-int resource_from_network(dns_resource_t * resource, char * buff, int max_size) {
+int resource_from_network(dns_resource_t * resource, char * buff, int max_size,
+                          char* full_msg) {
   char * c = buff;
   int tmp;
-  tmp = get_NAME_from_net(resource->NAME, buff, max_size);
+  tmp = get_NAME_from_net(resource->NAME, buff, max_size, full_msg);
   if (tmp < 0)
     return -1;
   max_size -= tmp;
@@ -79,12 +81,34 @@ int resource_from_network(dns_resource_t * resource, char * buff, int max_size) 
   max_size -= 2;
 
   int i;
-  for (i = 0; i < resource->RDLENGTH; ++i) {
-    if(max_size == 0)
-      return -1;
-    resource->RDATA[i] = *buff;
-    buff++;
-    max_size--;
+  if(resource->TYPE != TYPE_PTR && resource->TYPE != TYPE_A) {
+    for (i = 0; i < resource->RDLENGTH; ++i) {
+      if(max_size == 0)
+        return -1;
+      resource->RDATA[i] = *buff;
+      buff++;
+      max_size--;
+    }
+  }
+  else {
+    get_NAME_from_net(resource->RDATA,buff, max_size, full_msg);
+    buff += resource->RDLENGTH;
   }
   return buff - c;
+}
+
+
+int is_rPTR(dns_resource_t * resource) {
+  return (resource->TYPE == TYPE_PTR);
+}
+void set_rPTR(dns_resource_t * resource) {
+  resource->TYPE = TYPE_PTR;
+}
+
+int is_rA(dns_resource_t * resource) {
+  return (resource->TYPE == TYPE_A);
+}
+
+void set_rA(dns_resource_t * resource) {
+  resource->TYPE = TYPE_A;
 }

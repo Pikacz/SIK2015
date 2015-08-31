@@ -17,6 +17,13 @@ struct __dns_resource {
 typedef struct __dns_resource dns_resource_t;
 
 int resource_send_format(dns_resource_t * resource, char * buff);
-int resource_from_network(dns_resource_t * resource, char * buff, int max_size);
+int resource_from_network(dns_resource_t * resource, char * buff, int max_size,
+                          char* full_msg);
+
+int is_rPTR(dns_resource_t * resource);
+void set_rPTR(dns_resource_t * resource);
+
+int is_rA(dns_resource_t * resource);
+void set_rA(dns_resource_t * resource);
 
 #endif
