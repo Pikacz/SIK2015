@@ -49,7 +49,7 @@ int main(int argc, char *argv[])
 
 
 
-	init_mdns();
+	init_mdns(0);
 
 	multicast_ip = IP;      /* arg 1: multicast ip address */
 	multicast_port = PORT;    /* arg 2: multicast port number */
@@ -153,7 +153,7 @@ int main(int argc, char *argv[])
 										//if(strcmp(addrs->ifa_name, "lo") != 0) {
 											printf("chuj\n");
 											struct sockaddr_in *pAddr = (struct sockaddr_in *)tmpaddrs->ifa_addr;
-											if(answer_A(msg.questions + a, & ans, pAddr->sin_addr.s_addr) >= 0) {
+											if(answer(msg.questions + a, & ans, pAddr->sin_addr.s_addr) >= 0) {
 
 												init_header(&(msg2.header));
 												set_QR(&(msg2.header), QR_RESPONSE);

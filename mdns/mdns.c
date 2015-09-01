@@ -8,11 +8,12 @@
 #include "msg/utils.h"
 
 
-static char hostname[100], tmp[100], service[100], tmp2[100];
-static int hcounter = 0, hlen, slen;
+static char hostname[100], tmp[100], service[2][100], tmp2[100];
+static int hcounter = 0, hlen, slen[2];
+static int _ssh;
 
-void init_mdns() {
-
+void init_mdns(int ssh) {
+  _ssh = ssh;
   gethostname(tmp,55);
 
   strcpy(tmp2, tmp);
@@ -23,12 +24,14 @@ void init_mdns() {
   strcat(tmp, "._opoznienia._udp.local.");
   domain_to_NAME(hostname, tmp);
   hlen = strlen(hostname);
-  strcpy(service, "_opoznienia._udp.local.");
-  slen = strlen(service);
+  strcpy(service[0], "_opoznienia._udp.local.");
+  strcpy(service[1], "_ssh._tcp._udp.local.");
+  slen[0] = strlen(service[0]);
+  slen[1] = strlen(service[1]);
 }
 
 
-int answer_A(dns_question_t * question, dns_resource_t * answer,
+int answer(dns_question_t * question, dns_resource_t * answer,
    uint32_t myip) {
 
   int eq = 1, i;
@@ -51,9 +54,16 @@ int answer_A(dns_question_t * question, dns_resource_t * answer,
     *(uint32_t*)(answer->RDATA) = htonl(myip);
   }
   else if (is_qPTR(question)) {
-    for(i = 0; (i < slen + 1) && eq; ++i) {
-      if(service[i] != (question->QNAME)[i])
+    for(i = 0; (i < slen[0] + 1) && eq; ++i) {
+      if(service[0][i] != (question->QNAME)[i])
         eq = 0;
+    }
+    if(!eq && _ssh) {
+      eq = 1;
+      for(i = 0; (i < slen[1] + 1) && eq; ++i) {
+        if(service[1][i] != (question->QNAME)[i])
+          eq = 0;
+      }
     }
     if(!eq)
       return -1;

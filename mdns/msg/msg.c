@@ -16,16 +16,20 @@ void init_msg(dns_msg_t * msg) {
 void clean_msg(dns_msg_t * msg) {
   init_header(&(msg->header));
 
-  free(msg->questions);
+  if (msg->questions)
+    free(msg->questions);
   msg->questions = NULL;
 
-  free(msg->answers);
+  if (msg->answers)
+    free(msg->answers);
   msg->answers = NULL;
 
-  free(msg->authorities);
+  if (msg->authorities)
+    free(msg->authorities);
   msg->authorities = NULL;
 
-  free(msg->additionals);
+  if (msg->additionals)
+    free(msg->additionals);
   msg->additionals = NULL;
 }
 
