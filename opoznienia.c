@@ -1,6 +1,7 @@
 #include <event2/event.h>
 #include <event2/util.h>
 
+#include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -39,6 +40,44 @@ uint64_t current_timestamp() {
     gettimeofday(&te, NULL);
     uint64_t useconds = te.tv_sec*1000000LL + te.tv_usec;
     return useconds;
+}
+
+evutil_socket_t get_multi_sock() {
+    evutil_socket_t sock;
+    sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if(sock == -1 ||
+        evutil_make_listen_socket_reuseable(sock) ||
+        evutil_make_socket_nonblocking(sock)) {
+        fprintf(stderr, "blad podczas tworzenia socketa multicast\n");
+        exit(-1);
+    }
+
+    struct sockaddr_in sin;
+    sin.sin_family = AF_INET;
+    sin.sin_addr.s_addr = htonl(INADDR_ANY);
+    sin.sin_port = htons(MULTICAST_PORT);
+    if ((bind(sock, (struct sockaddr *) &sin, sizeof(sin))) < 0) {
+        fprintf(stderr, "blad podczas wiazania socketa multicast\n");
+        exit(-1);
+    }
+
+    struct ip_mreq ipmreq;
+    ipmreq.imr_multiaddr.s_addr = inet_addr(MULTICAST_IP);
+    ipmreq.imr_interface.s_addr = INADDR_ANY;
+
+    if ((setsockopt(sock , IPPROTO_IP, IP_ADD_MEMBERSHIP, (void*) &ipmreq,
+                    sizeof(ipmreq))) < 0) {
+          fprintf(stderr, "blad podczas ustawiania grupy socketa multicast\n");
+          exit(-1);
+    }
+
+    int loop = 0;
+    if (setsockopt(sock, IPPROTO_IP, IP_MULTICAST_LOOP, &loop,
+                   sizeof(loop)) < 0) {
+      fprintf(stderr, "blad podczas wylaczania petli socketa multicast\n");
+      exit(-1);
+    }
+    return sock;
 }
 
 
@@ -88,7 +127,7 @@ void udp_delays_cb(evutil_socket_t sock, short ev, void *arg) {
 
 int main (int argc, char **argv) {
   struct event_base *main_loop;
-  evutil_socket_t delay_sock;
+  evutil_socket_t delay_sock, multicast_sock;
 
   opterr = 0;
 
@@ -142,6 +181,7 @@ int main (int argc, char **argv) {
 
   main_loop = event_base_new();
   delay_sock = get_delay_sock();
+  multicast_sock = get_multi_sock();
 
   struct event *udp_client_event =
     event_new(main_loop, delay_sock, EV_READ|EV_PERSIST, udp_delays_cb, NULL);
