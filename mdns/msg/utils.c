@@ -7,7 +7,7 @@ int unit16_to_send(uint16_t num, char * buff) {
 
   tmp >>= 8;
 
-  *buff = (unsigned char) (tmp & 0x00FF);
+  *buff = (unsigned char) ((num >> 8) & 0x00FF);
   buff++;
 
   *buff = (unsigned char) (num & 0x00FF);
@@ -49,7 +49,7 @@ uint32_t get_uint32_t(char * buff) {
 int get_NAME_from_net(char * dest, char * buff, int max_size, char * full_msg) {
 
   char c = buff[0], i = 0;
-  int j = 0, length;
+  int j = 0, length, br = 0;
 
   length = 1;
   if(max_size == 0)
@@ -67,7 +67,8 @@ int get_NAME_from_net(char * dest, char * buff, int max_size, char * full_msg) {
       dest[j] = *buff;
       buff++;
       j++;
-      length += 1;
+      if(!br)
+        length += 1;
       max_size--;
     }
     if(max_size == 0)
@@ -76,6 +77,8 @@ int get_NAME_from_net(char * dest, char * buff, int max_size, char * full_msg) {
 
     while ((c & 0x80) && (c & 0x40)) {
       ptr= get_uint16_t(buff);
+      if(!br)
+        length += 2;
       ptr &= 0x3FFF;
       max_size += (buff - full_msg);
       buff = full_msg + ptr;
@@ -85,7 +88,8 @@ int get_NAME_from_net(char * dest, char * buff, int max_size, char * full_msg) {
     dest[j] = *buff;
     buff++;
     j++;
-    length += 1;
+    if(!br)
+      length += 1;
     max_size--;
   }
   return length;

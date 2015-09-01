@@ -8,74 +8,41 @@
 #include <unistd.h>
 
 #include "mdns/msg/msg.h"
+#include "mdns/msg/globals.h"
+#include "mdns/msg/utils.h"
+
 
 #define PORT 5353
 #define IP "224.0.0.251"
 
+int costam = 0;
+
 int make_msg(char * buff) {
-  dns_msg_t msg;
+  static dns_msg_t msg;
   dns_question_t q;
-  dns_resource_t ans, auth, add;
+
 
   init_header(&(msg.header));
-  set_ID(&(msg.header), 13);
-  set_QR(&(msg.header), 1);
-  set_Opcode(&(msg.header), 10);
-  set_AA(&(msg.header), 1);
-  set_TC(&(msg.header), 0);
-  set_Z(&(msg.header), 2);
+
+  set_QR(&(msg.header), QR_QUERY);
+
   set_QDCOUNT(&(msg.header), 1);
-  set_ANCOUNT(&(msg.header), 1);
-  set_NSCOUNT(&(msg.header), 1);
-  set_ARCOUNT(&(msg.header), 1);
-  q.QNAME[0] = 1;
-  q.QNAME[1] = 11;
-  q.QNAME[2] = 2;
-  q.QNAME[3] = 31;
-  q.QNAME[4] = 32;
-  q.QNAME[5] = 0;
-  q.qname_length = 6;
-  set_qA(&q);
-  q.QCLASS = 0x7665;
+  set_ANCOUNT(&(msg.header), 0);
+  set_NSCOUNT(&(msg.header), 0);
+  set_ARCOUNT(&(msg.header), 0);
+  if((costam % 2) == 0) {
+    q.qname_length = domain_to_NAME(q.QNAME, "sikvm3._opoznienia._udp.local.");
+    set_qA(&q);
+  }
+  else {
+    q.qname_length = domain_to_NAME(q.QNAME, "_opoznienia._udp.local.");
+    q.QTYPE = TYPE_PTR;
+  }
+  costam++;
+  q.QCLASS = CLASS_IN;
   msg.questions = &q;
 
-  ans.NAME[0] = 2;
-  ans.NAME[1] = 21;
-  ans.NAME[2] = 22;
-  ans.NAME[3] = 1;
-  ans.NAME[4] = 11;
-  ans.NAME[5] = 0;
-  ans.TYPE = 0x1212;
-  ans.CLASS = 0x2121;
-  ans.TTL = 100;
-  ans.RDLENGTH = 1;
-  ans.RDATA[0] = 43;
-  msg.answers = &ans;
 
-  auth.NAME[0] = 2;
-  auth.NAME[1] = 23;
-  auth.NAME[2] = 24;
-  auth.NAME[3] = 1;
-  auth.NAME[4] = 12;
-  auth.NAME[5] = 0;
-  auth.TYPE = 0x1221;
-  auth.CLASS = 0x2112;
-  auth.TTL = 100;
-  auth.RDLENGTH = 1;
-  auth.RDATA[0] = 44;
-  msg.authorities = &auth;
-
-  add.NAME[0] = 2;
-  add.NAME[1] = 25;
-  add.NAME[2] = 26;
-  add.NAME[3] = 1;
-  add.NAME[4] = 13;
-  add.NAME[5] = 0;
-  add.TYPE = 0x1221;
-  add.CLASS = 0x2112;
-  add.TTL = 100;
-  add.RDLENGTH = 0;
-  msg.additionals = &add;
   return send_format_msg(&msg, buff);
 }
 

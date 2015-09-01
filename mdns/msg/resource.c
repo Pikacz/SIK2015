@@ -13,6 +13,7 @@ int resource_send_format(dns_resource_t * resource, char * buff) {
   j++;
   i++;
 
+
   while(c) {
     for(cc = 0; cc < c; ++cc) {
       buff[i] = resource->NAME[j];
