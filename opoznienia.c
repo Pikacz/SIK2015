@@ -47,7 +47,34 @@ struct event_base *main_loop;
 struct sockaddr_in multicast_addr;
 
 
+typedef unsigned long long delay_val_t;
+
+int delay_length(delay_val_t d) {
+    int len = 1;
+    d /= 10;
+    while(d) {
+        len++;
+        d /= 10;
+    }
+    return len;
+}
+
+int delay_to_str(char *buffer, delay_val_t d) {
+    return sprintf(buffer, "%llu", d);
+}
+
+
 typedef struct _delay_t{
+    delay_val_t udp_delay;
+    delay_val_t tcp_delay;
+    delay_val_t icmp_delay;
+    int ipv4;
+
+} delay_t;
+
+
+
+typedef struct _delay_info_t{
     int32_t udp_delay[10];
     int32_t tcp_delay[10];
     int32_t icmp_delay[10];
@@ -55,16 +82,321 @@ typedef struct _delay_t{
     uint32_t ip;
     int udp_i, tcp_i;
 
-} delay_t;
+} delay_info_t;
 
 
-static delay_t found_ips[MAX_IPS];
+static delay_info_t found_ips[MAX_IPS];
 static char * found_UDP[MAX_IPS], * found_TCP[MAX_IPS];
 int ips_size = 0;
 
 
-typedef struct con_desc con_desc_t;
+void get_delays(delay_t ** delays, int * d_size) {
+  int i, j, k, l;
+  static delay_t ds[MAX_IPS];
+  delay_val_t tmp;
+  j = 0;
+  for(i = 0; i < MAX_IPS; ++i) {
+    if(found_ips[i].ip) {
+      tmp = 0; l = 0;
+      for(k = 0; k < 10; ++k) {
+        if(found_ips[i].udp_delay[k]) {
+          tmp += found_ips[i].udp_delay[k];
+          ++l;
+        }
+      }
+      if (l) {
+        ds[j].udp_delay = tmp / l;
+      }
+      else {
+        ds[j].udp_delay = 0;
+      }
 
+      tmp = 0; l = 0;
+      for(k = 0; k < 10; ++k) {
+        if(found_ips[i].tcp_delay[k]) {
+          tmp += found_ips[i].tcp_delay[k];
+          ++l;
+        }
+      }
+      if (l) {
+        ds[j].tcp_delay = tmp / l;
+      }
+      else {
+        ds[j].tcp_delay = 0;
+      }
+
+      tmp = 0; l = 0;
+      for(k = 0; k < 10; ++k) {
+        if(found_ips[i].icmp_delay[k]) {
+          tmp += found_ips[i].icmp_delay[k];
+          ++l;
+        }
+      }
+      if (l) {
+        ds[j].icmp_delay = tmp / l;
+      }
+      else {
+        ds[j].icmp_delay = 0;
+      }
+
+      if(ds[j].icmp_delay == 0 && ds[j].tcp_delay == 0 && ds[j].udp_delay) {
+        found_ips[i].ip = 0; // komputer nie odpowiada
+        for(k = 0; k < 3; ++k) {
+          if (found_ips[i].ev[k]) {
+            event_del(found_ips[i].ev[k]);
+            event_free(found_ips[i].ev[k]);
+            found_ips[i].ev[k] = NULL;
+          }
+        }
+        if(found_ips[i].udp_i >= 0) {
+          if(found_UDP[found_ips[i].udp_i]) {
+            free(found_UDP[found_ips[i].udp_i]);
+            found_UDP[found_ips[i].udp_i] = NULL;
+          }
+          found_ips[i].udp_i = -1;
+        }
+
+        if(found_ips[i].tcp_i >= 0) {
+          if(found_TCP[found_ips[i].tcp_i]) {
+            free(found_TCP[found_ips[i].tcp_i]);
+            found_TCP[found_ips[i].tcp_i] = NULL;
+          }
+          found_ips[i].tcp_i = -1;
+        }
+      }
+      else {
+        ds[j].ipv4 = found_ips[i].ip;
+        ++j;
+      }
+
+    }
+  }
+  *d_size = j;
+  *delays = ds;
+}
+
+void free_delays() {}
+
+
+struct con_des {
+  event * e;
+  int row_id;
+};
+
+typedef struct con_des con_desc_t;
+
+#define MAX_TELNET 10000
+con_desc_t telnet_descs[MAX_TELNET];
+
+#define DEFAULT_LENGTH 80
+
+
+const int clear_len = 6;
+const char * clear = "\033[H\033[J";
+
+
+delay_val_t delay_avg(delay_t data) {
+    return (data.udp_delay + data.tcp_delay + data.icmp_delay) / 3;
+}
+
+
+int str_ipv4(char *row, int ip) {
+    return sprintf(row, "%03d.%03d.%03d.%03d: ",
+                   (ip >> 24) & 0xFF,
+                   (ip >> 16) & 0xFF,
+                   (ip >> 8) & 0xFF,
+                   ip & 0xFF
+    );
+}
+
+void ipv4_str_row(char *row, int length, delay_t delay, delay_val_t max_delay,
+                  int max_spaces);
+
+void ipv4_str_row_max(char *row, int length, delay_t delay, int *max_spaces){
+    int ip_length = str_ipv4(row, delay.ipv4);
+    *max_spaces = length - ip_length;
+    *max_spaces -= delay_length(delay.udp_delay);
+    *max_spaces -= delay_length(delay.tcp_delay);
+    *max_spaces -= delay_length(delay.icmp_delay);
+    *max_spaces -= 2; // spaces between delays
+    ipv4_str_row(row, length, delay, delay_avg(delay), *max_spaces);
+
+}
+
+
+void ipv4_str_row(char *row, int length, delay_t delay, delay_val_t max_delay,
+                  int max_spaces) {
+
+    int tmp;
+    tmp =  str_ipv4(row, delay.ipv4);
+    row += tmp;
+    length -= tmp;
+
+    int spaces = (int)(((double) delay_avg(delay) /
+            (double) max_delay) * max_spaces);
+    length -= spaces;
+    int i;
+
+    for (i = 0; i < spaces; ++i){
+        row += sprintf(row, " ");
+    }
+
+    tmp = delay_to_str(row, delay.udp_delay);
+    row += tmp;
+    length -= tmp;
+
+    tmp = sprintf(row, " ");
+    row += tmp;
+    length -= tmp;
+
+    tmp = delay_to_str(row, delay.tcp_delay);
+    row += tmp;
+    length -= tmp;
+
+    tmp = sprintf(row, " ");
+    row += tmp;
+    length -= tmp;
+
+    tmp = delay_to_str(row, delay.icmp_delay);
+    row += tmp;
+    length -= tmp;
+    while(length > 0) {
+        row +=  sprintf(row, " ");
+        length--;
+    }
+
+}
+
+
+void ipv6_str_row_max(char *row1, char *row2, int length, delay_t delay,
+                      int *max_spaces){}
+
+
+void ipv6_str_row(char *row1, char *row2, delay_t delay, delay_val_t max_delay,
+                  int max_spaces){}
+
+void sort_delays(delay_t *delays, int size);
+
+void prepare_rows(char *** rows, int * r_size, int * r_max, delay_t * delays,
+                  int d_size, int ipv6_count, int length){
+    int i, j;
+    if (*rows == NULL) {
+        *r_size = 0;
+        *r_max = d_size + ipv6_count;
+        *rows = (char**) malloc(*r_max * sizeof(char*));
+
+    }
+    else if (d_size + ipv6_count > *r_max) {
+        while (d_size + ipv6_count > *r_max)
+            *r_max *= 2;
+        char **tmp;
+        tmp = (char**) malloc(*r_max * sizeof(char*));
+        for (i = 0 ; i < *r_size; ++i)
+            tmp[i] = (*rows)[i];
+        free(*rows);
+        *rows = tmp;
+    }
+
+    for(i = *r_size; i < *r_max; ++i)
+        (*rows)[i] = (char*) malloc(length * sizeof(char));
+
+
+
+    sort_delays(delays, d_size);
+
+    int max_spaces;
+    j = i = 0;
+    delay_val_t avg_delay = delay_avg(delays[j]);
+    if (delays[j].ipv4) {
+        ipv4_str_row_max((*rows)[i], length, delays[j], &max_spaces);
+        i++;
+        j++;
+    }
+    else {
+        ipv6_str_row_max((*rows)[i], (*rows)[i+1], length, delays[j], &max_spaces);
+        i += 2;
+        j++;
+    }
+    for (; j < d_size; ++i,j++) {
+        if(delays[j].ipv4)
+            ipv4_str_row((*rows)[i], length, delays[j], avg_delay, max_spaces);
+        else {
+            ipv6_str_row((*rows)[i], (*rows)[i+1], delays[j], avg_delay, max_spaces);
+            i++;
+        }
+
+    }
+}
+
+
+int get_display(char * str, char ** rows, int r_size, int * row_id,
+                 int n_rows) {
+    int i, length = 0, tmp;
+    //length += sprintf(str, clear);
+    str += length;
+    if (*row_id < 0)
+        *row_id = 0;
+    if (*row_id + n_rows > r_size)
+        *row_id = r_size - n_rows > 0 ? r_size - n_rows : 0;
+    for (i = 0; *row_id + i < r_size && i < n_rows; ++i) {
+        tmp =  sprintf(str,"%s\n", rows[*row_id + i]);
+        str += tmp;
+        length += tmp;
+    }
+    length += sprintf(str, "\0");
+    return length;
+}
+
+void _sort_delays(delay_t *data, int l, int r);
+
+void sort_delays(delay_t *delays, int size) {
+    _sort_delays(delays, 0, size - 1);
+
+}
+
+int partition(delay_t *data, int size);
+
+void _sort_delays(delay_t *data, int l, int r) {
+    int q;
+    if (l < r) {
+        q = partition(data + l, r - l + 1) + l;
+        _sort_delays(data, l, q - 1);
+        _sort_delays(data, q + 1, r);
+    }
+}
+
+
+
+void swap_delay(delay_t *data, int l, int r) {
+#ifdef DEBUG
+    if (l > r) {
+        exception("swap_delay left index higher than right!");
+    }
+#endif
+    delay_t tmp;
+    tmp = data[l];
+    data[l] = data[r];
+    data[r] = tmp;
+}
+
+int partition(delay_t *data, int size) {
+#ifdef DEBUG
+    if (size == 0)
+        exception("partition on empty array!");
+#endif
+    int i = -1, j;
+    delay_val_t avg = delay_avg(data[size - 1]);
+    for (j = 0; j < size - 1; ++j)
+    {
+        if (delay_avg(data[j]) >= avg) {
+            i++;
+            swap_delay(data, i, j);
+        }
+    }
+    i++;
+    swap_delay(data, i, size - 1);
+    return i;
+}
 
 
 uint64_t current_timestamp() {
@@ -79,7 +411,12 @@ void init_data() {
   memset(found_ips, 0, sizeof(found_ips));
   memset(found_UDP, 0, sizeof(found_UDP));
   memset(found_TCP, 0, sizeof(found_TCP));
+  memset(telnet_descs, 0, sizeof(telnet_descs));
   int tmp;
+
+  for(tmp = 0; tmp < MAX_IPS; ++tmp) {
+    found_ips[tmp].udp_i = found_ips[tmp].tcp_i = -1;
+  }
 
   delay_ref *= 1000;
   tmp = delay_ref;
@@ -201,6 +538,10 @@ evutil_socket_t get_delay_sock() {
 
 // Events
 
+void telnet_cb(evutil_socket_t sock, short ev, void *arg) {
+
+}
+
 void sigint_cb(evutil_socket_t sock, short ev, void *arg) {
 	printf("Papa :*\n");
   int i;
@@ -274,8 +615,11 @@ void udp_delays_ask_cb(evutil_socket_t sock, short ev, void *arg) {
 		(struct sockaddr *) &my_address, sizeof(my_address));
 
 	if (len != sizeof(uint64_t)) {
-		free(found_UDP[found_ips[id].udp_i]);
+    if(found_UDP[found_ips[id].udp_i])
+		  free(found_UDP[found_ips[id].udp_i]);
     found_UDP[found_ips[id].udp_i] = NULL;
+    found_ips[id].udp_i = -1;
+    event_del(found_ips[id].ev[0]);
     event_free(found_ips[id].ev[0]);
     found_ips[id].ev[0] = NULL;
     for(i = 0; i < 10; ++i)
@@ -289,7 +633,7 @@ void udp_delays_ask_cb(evutil_socket_t sock, short ev, void *arg) {
 
 
 void tcp_delay_cb(evutil_socket_t sock, short ev, void *arg) {
-  printf("delayy cb\n");
+  printf("delay tcp cb\n");
 //   int sock, id = *((int*)arg);
 // 	struct sockaddr_in server_address;
 //
@@ -432,7 +776,7 @@ void multicast_rcv_cb(evutil_socket_t sock, short ev, void *arg) {
               event_add(found_ips[jj].ev[0], &del_tv);
             } else if (names_equal(
               rcv.answers[i].NAME + rcv.answers[i].NAME[0] + 1,
-              UDP_SERV)) {
+              TCP_SERV)) {
 
               for(j = 0; j < MAX_IPS; ++j) {
                 if (names_equal(found_TCP[j], rcv.answers[i].NAME))
