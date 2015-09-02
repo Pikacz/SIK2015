@@ -27,7 +27,7 @@
 
 #define MDNS_MAX_LEN 30000
 
-#define MAX_IPS 100000
+#define MAX_IPS 1000
 
 #define NAME_MLENGTH 300
 
@@ -81,13 +81,15 @@ typedef struct _delay_info_t{
     struct event *ev[3]; // 0 - udp, 1 - tcp, 2 - icmp
     uint32_t ip;
     int udp_i, tcp_i;
+    int trys;
 
 } delay_info_t;
 
 
 static delay_info_t found_ips[MAX_IPS];
 static char * found_UDP[MAX_IPS], * found_TCP[MAX_IPS];
-int ips_size = 0;
+
+
 
 
 void get_delays(delay_t ** delays, int * d_size) {
@@ -139,7 +141,10 @@ void get_delays(delay_t ** delays, int * d_size) {
         ds[j].icmp_delay = 0;
       }
 
-      if(ds[j].icmp_delay == 0 && ds[j].tcp_delay == 0 && ds[j].udp_delay) {
+      /*if(ds[j].icmp_delay == 0 && ds[j].tcp_delay == 0 && ds[j].udp_delay) {
+        found_ips[i].trys++;
+        if(found_ips[i].trys < 100)
+          continue;
         found_ips[i].ip = 0; // komputer nie odpowiada
         for(k = 0; k < 3; ++k) {
           if (found_ips[i].ev[k]) {
@@ -163,11 +168,11 @@ void get_delays(delay_t ** delays, int * d_size) {
           }
           found_ips[i].tcp_i = -1;
         }
-      }
-      else {
+      }*/
+      //else {
         ds[j].ipv4 = found_ips[i].ip;
         ++j;
-      }
+      //}
 
     }
   }
@@ -179,17 +184,19 @@ void free_delays() {}
 
 
 struct con_des {
-  event * e;
-  int row_id;
+  struct event * e;
+  int sock;
+  int id;
 };
 
 typedef struct con_des con_desc_t;
 
-#define MAX_TELNET 10000
+#define MAX_TELNET 100
 con_desc_t telnet_descs[MAX_TELNET];
+int _r_id[MAX_TELNET];
 
 #define DEFAULT_LENGTH 80
-
+#define ROWS_NR 23
 
 const int clear_len = 6;
 const char * clear = "\033[H\033[J";
@@ -280,6 +287,10 @@ void sort_delays(delay_t *delays, int size);
 void prepare_rows(char *** rows, int * r_size, int * r_max, delay_t * delays,
                   int d_size, int ipv6_count, int length){
     int i, j;
+    if (d_size + ipv6_count <= 0) {
+      return;
+    }
+
     if (*rows == NULL) {
         *r_size = 0;
         *r_max = d_size + ipv6_count;
@@ -296,7 +307,6 @@ void prepare_rows(char *** rows, int * r_size, int * r_max, delay_t * delays,
         free(*rows);
         *rows = tmp;
     }
-
     for(i = *r_size; i < *r_max; ++i)
         (*rows)[i] = (char*) malloc(length * sizeof(char));
 
@@ -312,18 +322,10 @@ void prepare_rows(char *** rows, int * r_size, int * r_max, delay_t * delays,
         i++;
         j++;
     }
-    else {
-        ipv6_str_row_max((*rows)[i], (*rows)[i+1], length, delays[j], &max_spaces);
-        i += 2;
-        j++;
-    }
+    *r_size = d_size;
     for (; j < d_size; ++i,j++) {
         if(delays[j].ipv4)
             ipv4_str_row((*rows)[i], length, delays[j], avg_delay, max_spaces);
-        else {
-            ipv6_str_row((*rows)[i], (*rows)[i+1], delays[j], avg_delay, max_spaces);
-            i++;
-        }
 
     }
 }
@@ -332,7 +334,7 @@ void prepare_rows(char *** rows, int * r_size, int * r_max, delay_t * delays,
 int get_display(char * str, char ** rows, int r_size, int * row_id,
                  int n_rows) {
     int i, length = 0, tmp;
-    //length += sprintf(str, clear);
+    length += sprintf(str, "%s", clear);
     str += length;
     if (*row_id < 0)
         *row_id = 0;
@@ -343,7 +345,8 @@ int get_display(char * str, char ** rows, int r_size, int * row_id,
         str += tmp;
         length += tmp;
     }
-    length += sprintf(str, "\0");
+
+  //  length += sprintf(str, "\0");
     return length;
 }
 
@@ -412,6 +415,7 @@ void init_data() {
   memset(found_UDP, 0, sizeof(found_UDP));
   memset(found_TCP, 0, sizeof(found_TCP));
   memset(telnet_descs, 0, sizeof(telnet_descs));
+  memset(_r_id, 0, sizeof(_r_id));
   int tmp;
 
   for(tmp = 0; tmp < MAX_IPS; ++tmp) {
@@ -465,7 +469,7 @@ void init_ip() {
   my_ip = htonl(name.sin_addr.s_addr);
   if(p == NULL) {
     fprintf(stderr, "nie udalo sie zdobyc ip z polaczenia\n");
-    printf("Local ip is : %s \n" , buffer);
+    exit(-1);
   }
 
   close(sock);
@@ -537,9 +541,90 @@ evutil_socket_t get_delay_sock() {
 }
 
 // Events
+char **rows = NULL;
+int r_size = 0;
+int r_max = 0;
+
+void telnet_input_cb(evutil_socket_t sock, short ev, void *arg) {
+
+  int id = * ((int*) arg);
+  printf("input id %d\n", id);
+  char buff[1];
+  static char s[100 + 30*DEFAULT_LENGTH];
+  int rcv;
+  rcv = read(sock, buff, 1);
+  if(rcv > 0) {
+    if(buff[0] == 'a' || buff[0] == 'A')
+      _r_id[id]++;
+
+      if(buff[0] == 'q' || buff[0] == 'Q')
+        _r_id[id]--;
+
+
+    int size = get_display(s, rows, r_size, &(_r_id[id]), ROWS_NR);
+
+    int t = write(sock, s, size);
+
+  }
+  else {
+    _r_id[id] = 0;
+    close(sock);
+    event_del(telnet_descs[id].e);
+    event_free(telnet_descs[id].e);
+    telnet_descs[id].e = NULL;
+    telnet_descs[id].sock = 0;
+  }
+
+}
+
+void telnet_refresh_cb(evutil_socket_t sock, short ev, void *arg) {
+  static char s[100 + 30*DEFAULT_LENGTH];
+  delay_t *delays;
+  int d_size, i;
+  int size;
+
+  get_delays(&delays, &d_size);
+
+
+  prepare_rows(&rows, &r_size, &r_max, delays, d_size, 0, DEFAULT_LENGTH);
+
+  for(i = 0; i < MAX_TELNET; ++i) {
+    if (telnet_descs[i].e){
+      size = get_display(s, rows, r_size, &(_r_id[i]), ROWS_NR);
+      write(telnet_descs[i].sock, s, size);
+    }
+
+  }
+
+
+}
 
 void telnet_cb(evutil_socket_t sock, short ev, void *arg) {
+  static char s[100 + 30*DEFAULT_LENGTH];
+  fflush(stdout);
+  int i;
+  int msgsock = accept(sock, (struct sockaddr*)0, (socklen_t*)0);
+  delay_t *delays;
+  int d_size;
 
+  for(i = 0; i < MAX_TELNET; ++i) {
+    if(telnet_descs[i].e == NULL)
+      break;
+  }
+  _r_id[i] = 0;
+
+  telnet_descs[i].id = i;
+  telnet_descs[i].sock = msgsock;
+  get_delays(&delays, &d_size);
+
+  prepare_rows(&rows, &r_size, &r_max, delays, d_size, 0, DEFAULT_LENGTH);
+
+  int size = get_display(s, rows, r_size, &(_r_id[i]), ROWS_NR);
+  write(telnet_descs[i].sock, s, size);
+
+  telnet_descs[i].e = event_new(main_loop, msgsock, EV_READ|EV_PERSIST,
+             telnet_input_cb, (void *) &(telnet_descs[i].id));
+  event_add(telnet_descs[i].e, NULL);
 }
 
 void sigint_cb(evutil_socket_t sock, short ev, void *arg) {
@@ -590,12 +675,10 @@ void udp_delays_save_cb(evutil_socket_t sock, short ev, void *arg) {
     found_ips[id].udp_delay[i] = found_ips[id].udp_delay[i + 1];
   found_ips[id].udp_delay[9] = res;
   close(sock);
-  printf("udp save %d\n", id);
 }
 
 void udp_delays_ask_cb(evutil_socket_t sock, short ev, void *arg) {
   int id = * (int*) arg;
-  printf("delay ask %d\n", id);
   struct sockaddr_in my_address;
   static uint64_t buffer[1];
   my_address.sin_family = AF_INET; // IPv4
@@ -633,7 +716,7 @@ void udp_delays_ask_cb(evutil_socket_t sock, short ev, void *arg) {
 
 
 void tcp_delay_cb(evutil_socket_t sock, short ev, void *arg) {
-  printf("delay tcp cb\n");
+
 //   int sock, id = *((int*)arg);
 // 	struct sockaddr_in server_address;
 //
@@ -703,14 +786,14 @@ void multicast_rcv_cb(evutil_socket_t sock, short ev, void *arg) {
         return;
     }
 
-    printf("Received %d bytes from %s: ", rcv_len,
-           inet_ntoa(from_addr.sin_addr));
+    // printf("Received %d bytes from %s: ", rcv_len,
+    //        inet_ntoa(from_addr.sin_addr));
     fflush(stdout);
     if(message_from_network(&rcv, rcv_buff, MDNS_MAX_LEN) < 0) {
       printf("bledna wiadomosc\n");
     }
     else if(get_QR(&(rcv.header)) == QR_QUERY) {
-      printf("pytanie %d\n", get_QDCOUNT(&(rcv.header)));
+
       for(i = 0; i < get_QDCOUNT(&(rcv.header)); ++i) {
         if(answer(rcv.questions + i, &ans_r, my_ip) == 0) {
           //potrafie odpowiedziec
@@ -734,11 +817,11 @@ void multicast_rcv_cb(evutil_socket_t sock, short ev, void *arg) {
         for(i = 0; i < get_ANCOUNT(&(rcv.header)); ++i) {
 
           if (is_rA(rcv.answers + i)) {
-            printf("odpowiedz zawierajaca ip\n");
+
             for(jj = 0; jj < 4; ++jj){
-              printf("%u ", rcv.answers[i].RDATA[jj]);
+
             }
-            printf("\n");
+
             rcv_ip = ntohl (*((uint32_t *)rcv.answers[i].RDATA));
 
             if (names_equal(rcv.answers[i].NAME + rcv.answers[i].NAME[0] + 1,
@@ -929,7 +1012,7 @@ void multicast_discover_cb(evutil_socket_t sock, short ev, void *arg) {
 int main (int argc, char **argv) {
   evutil_socket_t delay_sock, multicast_sock;
   struct event *udp_client_event, *multicast_listener_event, *signal_event,
-               *discover_event;
+               *discover_event, *telnet, *telnet_ref;
   opterr = 0;
 
   int opt;
@@ -1025,6 +1108,31 @@ int main (int argc, char **argv) {
 		fprintf(stderr, "Could not create/add a signal event!\n");
 		return 1;
 	}
+
+  evutil_socket_t uisock = socket(PF_INET, SOCK_STREAM, 0);
+  struct sockaddr_in uiadrr;
+  uiadrr.sin_family = AF_INET;
+  uiadrr.sin_addr.s_addr = htonl(INADDR_ANY);
+  uiadrr.sin_port = htons(ui_port);
+
+  if(uisock == -1 ||
+     evutil_make_listen_socket_reuseable(uisock) ||
+     evutil_make_socket_nonblocking(uisock)) {
+   		return 1;
+  }
+  bind(uisock, (struct sockaddr*)&uiadrr, (socklen_t)sizeof(uiadrr));
+
+  listen(uisock, 5);
+
+  telnet = event_new(main_loop, uisock, EV_READ|EV_PERSIST, telnet_cb, NULL);
+  event_add(telnet, NULL);
+
+
+
+
+  telnet_ref = event_new(main_loop, uisock, EV_TIMEOUT|EV_PERSIST,
+    telnet_refresh_cb, NULL);
+  event_add(telnet_ref, &ui_tv);
 
   if(event_base_dispatch(main_loop) == -1) {
     fprintf(stderr, "nie udalo sie uruchomic glownej petli\n");
