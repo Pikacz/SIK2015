@@ -82,7 +82,7 @@ int resource_from_network(dns_resource_t * resource, char * buff, int max_size,
   max_size -= 2;
 
   int i;
-  if(resource->TYPE != TYPE_PTR && resource->TYPE != TYPE_A) {
+  if(resource->TYPE != TYPE_PTR) {
     for (i = 0; i < resource->RDLENGTH; ++i) {
       if(max_size == 0)
         return -1;

@@ -441,15 +441,15 @@ void rand_resource(dns_resource_t * res) {
   }
 }
 
-void names_equal(char * n1, char * n2) {
-  int i = 0;
-
-  while((n1[i] != 0) &&(n2[i] != 0)) {
-    assert(n1[i] == n2[i]);
-    i++;
-  }
-  assert(n1[i] == n2[i]);
-}
+// void names_equal(char * n1, char * n2) {
+//   int i = 0;
+//
+//   while((n1[i] != 0) &&(n2[i] != 0)) {
+//     assert(n1[i] == n2[i]);
+//     i++;
+//   }
+//   assert(n1[i] == n2[i]);
+// }
 
 
 
@@ -460,7 +460,7 @@ void r_t2() {
   resource_send_format(&r1, buff);
   assert(resource_from_network(&r2, buff, 1, buff) == -1);
   resource_from_network(&r2, buff, 400, buff);
-  names_equal(r1.NAME, r2.NAME);
+  assert(names_equal(r1.NAME, r2.NAME) == 1);
   assert(r1.TYPE == r2.TYPE);
   assert(r1.CLASS == r2.CLASS);
   assert(r1.TTL == r2.TTL);
@@ -500,7 +500,7 @@ void resources_equal(dns_resource_t * r1, dns_resource_t * r2) {
   assert(r1->CLASS == r2->CLASS);
   assert(r1->TTL == r2->TTL);
   assert(r1->RDLENGTH == r2->RDLENGTH);
-  names_equal(r1->NAME, r2->NAME);
+  assert(names_equal(r1->NAME, r2->NAME) == 1);
 }
 
 

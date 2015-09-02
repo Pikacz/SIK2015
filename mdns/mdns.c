@@ -2,10 +2,12 @@
 #include <string.h> //strcat
 #include <arpa/inet.h>
 #include <stdio.h>
+#include <assert.h>
 
 #include "mdns.h"
 #include "msg/globals.h"
 #include "msg/utils.h"
+#include "msg/limits.h"
 
 
 static char hostname[100], tmp[100], service[2][100], tmp2[100];
@@ -24,8 +26,8 @@ void init_mdns(int ssh) {
   strcat(tmp, "._opoznienia._udp.local.");
   domain_to_NAME(hostname, tmp);
   hlen = strlen(hostname);
-  strcpy(service[0], "_opoznienia._udp.local.");
-  strcpy(service[1], "_ssh._tcp._udp.local.");
+  domain_to_NAME(service[0], "_opoznienia._udp.local.");
+  domain_to_NAME(service[1], "_ssh._tcp._udp.local.");
   slen[0] = strlen(service[0]);
   slen[1] = strlen(service[1]);
 }
@@ -45,8 +47,9 @@ int answer(dns_question_t * question, dns_resource_t * answer,
     if(!eq)
       return -1;
 
-    answer->NAME[0] = '\0';
+
     strcpy(answer->NAME, hostname);
+  
 
     answer->CLASS = CLASS_IN;
     answer->TYPE = TYPE_A;
@@ -54,15 +57,22 @@ int answer(dns_question_t * question, dns_resource_t * answer,
     *(uint32_t*)(answer->RDATA) = htonl(myip);
   }
   else if (is_qPTR(question)) {
+    eq = 1;
     for(i = 0; (i < slen[0] + 1) && eq; ++i) {
       if(service[0][i] != (question->QNAME)[i])
         eq = 0;
+    }
+    if (eq) {
+      strcpy(answer->NAME, service[0]);
     }
     if(!eq && _ssh) {
       eq = 1;
       for(i = 0; (i < slen[1] + 1) && eq; ++i) {
         if(service[1][i] != (question->QNAME)[i])
           eq = 0;
+      }
+      if (eq) {
+        strcpy(answer->NAME, service[1]);
       }
     }
     if(!eq)
@@ -90,4 +100,50 @@ void ask_PTR(char * serv, dns_question_t * question) {
   question->QCLASS = CLASS_IN;
   strcpy(question->QNAME, serv);
   question->qname_length = strlen(serv) + 1;
+}
+
+int rPTR_my_name(dns_resource_t * resource, char * full_msg) {
+  static char buff[300];
+  memset(buff, 0, sizeof(buff));
+  assert(resource->TYPE == TYPE_PTR);
+  int i, eq = 1;
+  if(get_NAME_from_net(buff, resource->RDATA, resource->RDLENGTH, full_msg) < 0)
+    return 0;
+  for(i = 0; (i < hlen + 1) && eq; ++i) {
+    if(hostname[i] != (buff)[i])
+      eq = 0;
+  }
+  if (eq)
+    init_mdns(_ssh);
+  return eq;
+}
+
+int rPTR_UDP(dns_resource_t * resource, char * full_msg) {
+  static char buff[300];
+  memset(buff, 0, sizeof(buff));
+  assert(resource->TYPE == TYPE_PTR);
+  int i, eq = 1;
+  if(get_NAME_from_net(buff, resource->NAME, DNS_R_NAME_MAX_LENGTH, full_msg)
+    < 0)
+    return 0;
+  for(i = 0; (i < slen[0] + 1) && eq; ++i) {
+    if(service[0][i] != (buff)[i])
+      eq = 0;
+  }
+  return eq;
+}
+
+int rPTR_TCP(dns_resource_t * resource, char * full_msg) {
+  static char buff[300];
+  memset(buff, 0, sizeof(buff));
+  assert(resource->TYPE == TYPE_PTR);
+  int i, eq = 1;
+  if(get_NAME_from_net(buff, resource->NAME, DNS_R_NAME_MAX_LENGTH, full_msg)
+    < 0)
+    return 0;
+  for(i = 0; (i < slen[1] + 1) && eq; ++i) {
+    if(service[1][i] != (buff)[i])
+      eq = 0;
+  }
+  return eq;
 }

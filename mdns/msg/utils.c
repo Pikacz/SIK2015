@@ -47,7 +47,7 @@ uint32_t get_uint32_t(char * buff) {
 
 
 int get_NAME_from_net(char * dest, char * buff, int max_size, char * full_msg) {
-
+  // todo poprawic aby sprawdzalo czy nazwa nie jest za dluga!
   char c = buff[0], i = 0;
   int j = 0, length, br = 0;
 
@@ -126,4 +126,47 @@ int domain_to_NAME(char * NAME, const char * domain) {
     }
   }
   return s - NAME + 1;
+}
+
+int names_equal(char * n1, char * n2) {
+  char c1, c2, c;
+  if(n1 == NULL || n2 == NULL)
+    return 0;
+  c1 = *n1; c2 = *n2;
+
+  n1++; n2++;
+  if(c1 != c2)
+    return 0;
+  while (c1 && c2) {
+    for(c = 0; c < c1; ++c) {
+      if (*n1 != *n2)
+        return 0;
+      ++n1; ++n2;
+    }
+
+    c1 = *n1; c2 = *n2;
+    if (*n1 != *n2)
+      return 0;
+    ++n1; ++n2;
+  }
+  return 1;
+}
+
+int fprintfname(FILE * f, char * name) {
+  unsigned char c, i;
+  int to_ret = 0;
+  c= *name;
+  name++;
+  to_ret += fprintf(f, "%d ", c);
+  while(c) {
+    for(i = 0; i < c; ++i) {
+      to_ret += fprintf(f, "%c", *name);
+      name++;
+    }
+    c= *name;
+    name++;
+    to_ret += fprintf(f, "%d ", c);
+  }
+  fprintf(f, "\n");
+  return to_ret;
 }

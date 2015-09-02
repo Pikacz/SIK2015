@@ -1,4 +1,4 @@
-TARGET: main main_test sender reciever opoznienia
+TARGET: main_test sender opoznienia
 CC = gcc
 CFLAGS = -Wall
 
@@ -49,12 +49,6 @@ main_test: mdns tests main_test.c
 	 obj/tests/tests.o obj/tests/mdns/msg.o obj/tests/mdns/mdns.o \
 	 -o tesciki
 
-main: mdns tests main.c
-	$(CC) $(CFLAGS) main.c \
-	obj/mdns/msg/header.o obj/mdns/msg/question.o obj/mdns/msg/resource.o \
-	obj/mdns/msg/msg.o obj/mdns/msg/utils.o obj/mdns/mdns.o \
-	obj/tests/tests.o obj/tests/mdns/msg.o obj/tests/mdns/mdns.o \
-	-o cos
 
 sender: mdns sender.c
 	$(CC) $(CFLAGS) sender.c \
@@ -63,12 +57,6 @@ sender: mdns sender.c
 	obj/tests/tests.o obj/tests/mdns/msg.o obj/tests/mdns/mdns.o \
 	-o sender.bin
 
-reciever: mdns reciever.c
-	$(CC) $(CFLAGS) reciever.c \
- 	 obj/mdns/msg/header.o obj/mdns/msg/question.o obj/mdns/msg/resource.o \
- 	 obj/mdns/msg/msg.o obj/mdns/msg/utils.o obj/mdns/mdns.o \
- 	 obj/tests/tests.o obj/tests/mdns/msg.o obj/tests/mdns/mdns.o \
- 	 -o reciever.bin
 
 opoznienia: mdns opoznienia.c
 	$(CC) $(CFLAGS) opoznienia.c \
