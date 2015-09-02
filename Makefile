@@ -1,4 +1,4 @@
-TARGET: main_test sender opoznienia
+TARGET: main_test opoznienia
 CC = gcc
 CFLAGS = -Wall
 
@@ -50,12 +50,6 @@ main_test: mdns tests main_test.c
 	 -o tesciki
 
 
-sender: mdns sender.c
-	$(CC) $(CFLAGS) sender.c \
-	obj/mdns/msg/header.o obj/mdns/msg/question.o obj/mdns/msg/resource.o \
-	obj/mdns/msg/msg.o obj/mdns/msg/utils.o obj/mdns/mdns.o \
-	obj/tests/tests.o obj/tests/mdns/msg.o obj/tests/mdns/mdns.o \
-	-o sender.bin
 
 
 opoznienia: mdns opoznienia.c
@@ -67,4 +61,5 @@ opoznienia: mdns opoznienia.c
 
 clean:
 	rm -rf obj
-	rm *.gch */*.gch */*/*.gch */*/*/*.gch */*/*/*/*.gch
+	rm -f *.gch */*.gch */*/*.gch */*/*/*.gch */*/*/*/*.gch
+	rm -f opoznienia tesciki *.bin
